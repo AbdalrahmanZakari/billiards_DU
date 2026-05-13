@@ -1,10 +1,393 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>3D Billiardsnpx</title>
-    <style> body { margin: 0; } canvas { width: 100vw; height: 100vh; display: block; } </style>
-  </head>
-  <body>
-    <script type="module" src="main.js"></script>
-  </body>
+<head>
+  <title>Billiard Hall</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: white; font-size: 20px;
+      pointer-events: none; user-select: none;
+    }
+    #instructions {
+      position: fixed;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      color: white; font-family: Arial;
+      font-size: 14px; text-align: center;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 20px; border-radius: 8px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="crosshair">+</div>
+<div id="instructions">Click to capture mouse — W A S D to move — E Q to up/down — Mouse to look</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+// ================= Scene =================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+// ================= Camera =================
+const camera = new THREE.PerspectiveCamera(
+  75, window.innerWidth / window.innerHeight, 0.1, 2000
+);
+camera.position.set(0, 5, 30);
+
+// ================= Renderer =================
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ================= Pointer Lock =================
+let yaw = 0, pitch = 0, isLocked = false;
+renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+document.addEventListener('pointerlockchange', () => {
+  isLocked = document.pointerLockElement === renderer.domElement;
+  document.getElementById('instructions').style.display = isLocked ? 'none' : 'block';
+});
+document.addEventListener('mousemove', (e) => {
+  if (!isLocked) return;
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch  = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch));
+});
+
+// ================= WASD + E/Q =================
+const keys = {};
+document.addEventListener('keydown', (e) => keys[e.code] = true);
+document.addEventListener('keyup',   (e) => keys[e.code] = false);
+
+const moveSpeed = 0.12;
+const dir = new THREE.Vector3();
+const right = new THREE.Vector3();
+let cameraY = 5;
+
+function updateMovement() {
+  if (!isLocked) return;
+  dir.set(Math.sin(yaw), 0, Math.cos(yaw));
+  right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+  if (keys['KeyW']) camera.position.addScaledVector(dir, -moveSpeed);
+  if (keys['KeyS']) camera.position.addScaledVector(dir,  moveSpeed);
+  if (keys['KeyA']) camera.position.addScaledVector(right, -moveSpeed);
+  if (keys['KeyD']) camera.position.addScaledVector(right,  moveSpeed);
+  if (keys['KeyE']) cameraY += moveSpeed;
+  if (keys['KeyQ']) cameraY -= moveSpeed;
+  cameraY = Math.max(1, Math.min(12, cameraY));
+  camera.position.y = cameraY;
+  camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+}
+
+// ================= Lights =================
+const ambient = new THREE.AmbientLight(0xffffff, 0.05);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.05);
+dirLight.position.set(0, 10, 0);
+scene.add(dirLight);
+
+// ================= Textures =================
+const texLoader = new THREE.TextureLoader();
+
+function loadWallMaterial(repeatX, repeatY) {
+  const color        = texLoader.load('./wood/Wood084A_2K-JPG_Color.jpg');
+  const normalGL     = texLoader.load('./wood/Wood084A_2K-JPG_NormalGL.jpg');
+  const roughness    = texLoader.load('./wood/Wood084A_2K-JPG_Roughness.jpg');
+  const displacement = texLoader.load('./wood/Wood084A_2K-JPG_Displacement.jpg');
+  [color, normalGL, roughness, displacement].forEach(t => {
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeatX, repeatY);
+  });
+  return new THREE.MeshStandardMaterial({
+    map: color, normalMap: normalGL,
+    roughnessMap: roughness, displacementMap: displacement,
+    displacementScale: 0.03, roughness: 0.8, metalness: 0.0,
+  });
+}
+
+// ================= Hall =================
+const hallWidth = 60, hallHeight = 14, hallDepth = 50;
+
+const floorColor = texLoader.load('./wood/Wood084A_2K-JPG_Color.jpg');
+const floorNorm  = texLoader.load('./wood/Wood084A_2K-JPG_NormalGL.jpg');
+const floorRough = texLoader.load('./wood/Wood084A_2K-JPG_Roughness.jpg');
+[floorColor, floorNorm, floorRough].forEach(t => {
+  t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(10, 8);
+});
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(hallWidth, hallDepth),
+  new THREE.MeshStandardMaterial({ map: floorColor, normalMap: floorNorm, roughnessMap: floorRough, roughness: 0.9, color: 0x888888 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const ceiling = new THREE.Mesh(
+  new THREE.PlaneGeometry(hallWidth, hallDepth),
+  new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
+);
+ceiling.rotation.x = Math.PI / 2;
+ceiling.position.y = hallHeight;
+scene.add(ceiling);
+
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(hallWidth, hallHeight), loadWallMaterial(6, 2));
+backWall.position.set(0, hallHeight / 2, -hallDepth / 2);
+scene.add(backWall);
+
+const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(hallWidth, hallHeight), loadWallMaterial(6, 2));
+frontWall.rotation.y = Math.PI;
+frontWall.position.set(0, hallHeight / 2, hallDepth / 2);
+scene.add(frontWall);
+
+const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(hallDepth, hallHeight), loadWallMaterial(5, 2));
+leftWall.rotation.y = Math.PI / 2;
+leftWall.position.set(-hallWidth / 2, hallHeight / 2, 0);
+scene.add(leftWall);
+
+const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(hallDepth, hallHeight), loadWallMaterial(5, 2));
+rightWall.rotation.y = -Math.PI / 2;
+rightWall.position.set(hallWidth / 2, hallHeight / 2, 0);
+scene.add(rightWall);
+
+// ================= Ball Texture Generator =================
+// Creates a canvas texture with the ball number and correct color
+const ballData = [
+  { n: 0,  color: '#ffffff', stripe: false }, // cue ball
+  { n: 1,  color: '#f5b800', stripe: false }, // yellow solid
+  { n: 2,  color: '#1a44c8', stripe: false }, // blue solid
+  { n: 3,  color: '#d62b2b', stripe: false }, // red solid
+  { n: 4,  color: '#6b1fa0', stripe: false }, // purple solid
+  { n: 5,  color: '#e06000', stripe: false }, // orange solid
+  { n: 6,  color: '#1a8c1a', stripe: false }, // green solid
+  { n: 7,  color: '#8b1a1a', stripe: false }, // maroon solid
+  { n: 8,  color: '#111111', stripe: false }, // black 8 ball
+  { n: 9,  color: '#f5b800', stripe: true  }, // yellow stripe
+  { n: 10, color: '#1a44c8', stripe: true  }, // blue stripe
+  { n: 11, color: '#d62b2b', stripe: true  }, // red stripe
+  { n: 12, color: '#6b1fa0', stripe: true  }, // purple stripe
+  { n: 13, color: '#e06000', stripe: true  }, // orange stripe
+  { n: 14, color: '#1a8c1a', stripe: true  }, // green stripe
+  { n: 15, color: '#8b1a1a', stripe: true  }, // maroon stripe
+];
+
+function makeBallTexture(data) {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  if (data.stripe) {
+    // white base
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    // colored stripe in the middle
+    ctx.fillStyle = data.color;
+    ctx.fillRect(0, size * 0.3, size, size * 0.4);
+  } else {
+    // solid color
+    ctx.fillStyle = data.color;
+    ctx.fillRect(0, 0, size, size);
+  }
+
+  // white circle for number
+  if (data.n > 0) {
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size * 0.22, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // number text
+    ctx.fillStyle = '#222222';
+    ctx.font = `bold ${size * 0.28}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(data.n), size / 2, size / 2);
+  }
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+// ================= Create All 16 Balls =================
+const BALL_RADIUS = 0.18;
+
+// Triangle rack formation offsets (standard pool layout)
+const rackOffsets = [
+  // row 1 (front - 1 ball)
+  [0, 0],
+  // row 2 (2 balls)
+  [0.32, -0.185], [0.32,  0.185],
+  // row 3 (3 balls)
+  [0.64, -0.37],  [0.64,  0],    [0.64,  0.37],
+  // row 4 (4 balls)
+  [0.96, -0.555], [0.96, -0.185],[0.96,  0.185],[0.96,  0.555],
+  // row 5 (5 balls)
+  [1.28, -0.74],  [1.28, -0.37], [1.28,  0],   [1.28,  0.37], [1.28,  0.74],
+];
+
+// ball order in rack: 1 at top, 8 in middle, rest random
+const rackOrder = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
+
+function createBalls(tableX, tableZ, tableTopY) {
+  const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 32);
+  const y = tableTopY + BALL_RADIUS + 0.01;
+
+  // place racked balls
+  rackOrder.forEach((ballNum, i) => {
+    const offset = rackOffsets[i];
+    const mat = new THREE.MeshStandardMaterial({
+      map: makeBallTexture(ballData[ballNum]),
+      roughness: 0.2,
+      metalness: 0.1,
+    });
+    const ball = new THREE.Mesh(ballGeo, mat);
+    ball.position.set(
+      tableX + offset[1],
+      y,
+      tableZ + offset[0]
+    );
+    ball.castShadow = true;
+    scene.add(ball);
+  });
+
+  // cue ball — placed separately to the left of the rack
+  const cueMat = new THREE.MeshStandardMaterial({
+    map: makeBallTexture(ballData[0]),
+    roughness: 0.15,
+    metalness: 0.1,
+  });
+  const cueBall = new THREE.Mesh(ballGeo, cueMat);
+  cueBall.position.set(tableX , 4.2, tableZ);
+  cueBall.castShadow = true;
+  scene.add(cueBall);
+}
+
+// ================= Positions =================
+const lampPositions = [
+  { x: -16, z: -10 }, { x: 0, z: -10 }, { x: 16, z: -10 },
+  { x: -8,  z:  10 }, { x: 8, z:  10 },
+];
+const tablePositions = lampPositions;
+const lampY = hallHeight - 3;
+
+// ================= Loader =================
+const loader = new THREE.GLTFLoader();
+
+// ================= Load Lamps =================
+loader.load('./ceiling_lamps.glb', function(gltf) {
+  const originalLamp = gltf.scene;
+  const box = new THREE.Box3().setFromObject(originalLamp);
+  originalLamp.position.sub(box.getCenter(new THREE.Vector3()));
+  originalLamp.scale.setScalar(5 / box.getSize(new THREE.Vector3()).length());
+
+  originalLamp.traverse((child) => {
+    if (child.isMesh) {
+      child.material = child.material.clone();
+      child.material.emissive = new THREE.Color(0xfff5aa);
+      child.material.emissiveIntensity = 1.5;
+    }
+  });
+
+  lampPositions.forEach((pos, i) => {
+    const lamp = i === 0 ? originalLamp : originalLamp.clone();
+    lamp.position.set(pos.x, lampY, pos.z);
+    scene.add(lamp);
+
+    const spot = new THREE.SpotLight(0xfff5cc, 6, 30, Math.PI / 2.5, 0.5, 0.5);
+    spot.position.set(pos.x, lampY - 0.5, pos.z);
+    spot.target.position.set(pos.x, 0, pos.z);
+    spot.castShadow = true;
+    spot.shadow.mapSize.width = spot.shadow.mapSize.height = 1024;
+    scene.add(spot);
+    scene.add(spot.target);
+
+    const fill = new THREE.PointLight(0xfff5cc, 3, 30);
+    fill.position.set(pos.x, lampY - 1, pos.z);
+    scene.add(fill);
+  });
+
+  console.log("LAMPS LOADED ✅");
+}, undefined, (e) => console.error("LAMP ERROR ❌", e));
+
+// ================= Load Tables + Balls =================
+loader.load('./billiards_pool.glb', function(gltf) {
+  const original = gltf.scene;
+  const box    = new THREE.Box3().setFromObject(original);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+
+  original.position.sub(center);
+  original.scale.setScalar(10 / Math.max(size.x, size.y, size.z));
+
+  const scaledBox    = new THREE.Box3().setFromObject(original);
+  const tableTopY    = scaledBox.max.y;
+  const tableBottomY = scaledBox.min.y;
+
+  tablePositions.forEach((pos, i) => {
+    const clone = i === 0 ? original : original.clone();
+    clone.position.set(pos.x, -tableBottomY, pos.z);
+    scene.add(clone);
+
+    // place 16 balls on every table
+    createBalls(pos.x, pos.z, tableTopY - tableBottomY);
+  });
+
+  console.log("TABLES + BALLS LOADED ✅");
+
+  loader.load('./stick.glb', function(gltf) {
+    const stick = gltf.scene;
+    const sBox  = new THREE.Box3().setFromObject(stick);
+    stick.position.sub(sBox.getCenter(new THREE.Vector3()));
+    stick.scale.setScalar(8 / sBox.getSize(new THREE.Vector3()).length());
+    stick.rotation.x = Math.PI / 8;
+    stick.rotation.z = Math.PI / 2;
+    stick.position.set(tablePositions[0].x, tableTopY - tableBottomY + 0.05, tablePositions[0].z);
+    scene.add(stick);
+    console.log("STICK LOADED ✅");
+  }, undefined, (e) => console.error("STICK ERROR ❌", e));
+
+}, undefined, (e) => console.error("TABLE ERROR ❌", e));
+
+// ================= Load Person =================
+loader.load('./star.glb', function(gltf) {
+  const person = gltf.scene;
+  const box    = new THREE.Box3().setFromObject(person);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+  person.position.sub(center);
+  person.scale.setScalar(3 / Math.max(size.x, size.y, size.z));
+  const scaledBox = new THREE.Box3().setFromObject(person);
+  person.position.set(tablePositions[0].x + 6, -scaledBox.min.y, tablePositions[0].z);
+  person.rotation.y = -Math.PI / 2;
+  scene.add(person);
+  console.log("PERSON LOADED ✅");
+}, undefined, (e) => console.error("PERSON ERROR ❌", e));
+
+// ================= Animate =================
+function animate() {
+  requestAnimationFrame(animate);
+  updateMovement();
+  renderer.render(scene, camera);
+}
+animate();
+
+// ================= Resize =================
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
 </html>
