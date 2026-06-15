@@ -21,66 +21,325 @@
       padding: 10px 20px; border-radius: 8px;
       pointer-events: none;
     }
+    #playBtn {
+      position: fixed;
+      top: 20px; right: 20px;
+      padding: 12px 24px;
+      background: #e8a000;
+      color: #111; font-family: Arial;
+      font-size: 15px; font-weight: bold;
+      border: none; border-radius: 8px;
+      cursor: pointer; z-index: 100;
+    }
+    #playBtn:hover { background: #ffbb00; }
+    #aimInfo {
+      display: none;
+      position: fixed;
+      top: 20px; left: 50%;
+      transform: translateX(-50%);
+      color: white; font-family: Arial;
+      font-size: 14px; text-align: center;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 20px; border-radius: 8px;
+      pointer-events: none;
+    }
+    #powerBar {
+      display: none;
+      position: fixed;
+      bottom: 60px; left: 50%;
+      transform: translateX(-50%);
+      width: 200px; height: 16px;
+      background: rgba(0,0,0,0.5);
+      border: 2px solid #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #powerFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, #00cc00, #ffcc00, #ff3300);
+      transition: width 0.05s;
+    }
+    #gameMsg {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: white; font-family: Arial;
+      font-size: 28px; font-weight: bold;
+      text-align: center;
+      background: rgba(0,0,0,0.85);
+      padding: 30px 50px;
+      border-radius: 16px;
+      z-index: 200;
+      border: 2px solid #e8a000;
+    }
+    #gameMsg button {
+      margin-top: 16px;
+      padding: 10px 28px;
+      background: #e8a000;
+      border: none; border-radius: 8px;
+      font-size: 16px; font-weight: bold;
+      cursor: pointer; display: block;
+      width: 100%;
+    }
+
+    /* ====== Physics Panel ====== */
+    #physicsPanel {
+      display: none;
+      position: fixed;
+      top: 80px; left: 20px;
+      background: rgba(0,0,0,0.92);
+      color: #00ffcc;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      border: 1px solid #00ffcc55;
+      z-index: 150;
+      min-width: 300px;
+      pointer-events: none;
+      line-height: 2;
+    }
+    #physicsPanel h3 {
+      margin: 0 0 8px 0;
+      color: #ffcc00;
+      font-size: 15px;
+      border-bottom: 1px solid #ffffff33;
+      padding-bottom: 6px;
+    }
+    .ph-section {
+      margin-top: 8px;
+      color: #ffaa44;
+      font-size: 11px;
+      border-top: 1px solid #ffffff22;
+      padding-top: 4px;
+      font-weight: bold;
+    }
+    .ph-label { color: #888888; }
+    .ph-val   { color: #00ffcc; font-weight: bold; }
+    .ph-live  { color: #ffff44; font-weight: bold; }
+    .ph-form  { color: #ff8844; font-size: 11px; display: block; margin-left: 8px; }
+    #pToggleHint {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      color: #ffffff66;
+      font-family: Arial; font-size: 12px;
+      pointer-events: none;
+      background: rgba(0,0,0,0.5);
+      padding: 6px 12px; border-radius: 6px;
+    }
   </style>
 </head>
 <body>
 
 <div id="crosshair">+</div>
 <div id="instructions">Click to capture mouse — W A S D to move — E Q to up/down — Mouse to look</div>
+<button id="playBtn">🎱 Single Player Mode</button>
+<div id="aimInfo">Mouse to aim — Scroll to pull back — Click to shoot — R reset — P physics — F exit</div>
+<div id="powerBar"><div id="powerFill"></div></div>
+<div id="pToggleHint">P — Show Physics</div>
+
+<div id="gameMsg">
+  <div id="gameMsgText"></div>
+  <button onclick="resetBalls()">🔄 Play Again</button>
+</div>
+
+<!-- ===== Physics Panel ===== -->
+<div id="physicsPanel">
+  <h3>⚙️ Physics Dashboard</h3>
+
+  <span class="ph-section">── Constants ──</span><br>
+  <span class="ph-label">Mass (m)         = </span><span class="ph-val">0.17 kg</span><br>
+  <span class="ph-form">Standard billiard ball mass</span>
+  <span class="ph-label">Radius (r)       = </span><span class="ph-val">0.18 m</span><br>
+  <span class="ph-label">Gravity (g)      = </span><span class="ph-val">9.81 m/s²</span><br>
+  <span class="ph-label">Normal Force (N) = </span><span class="ph-val">1.6677 N</span><br>
+  <span class="ph-form">N = m × g = 0.17 × 9.81</span>
+
+  <span class="ph-section">── Friction ──</span><br>
+  <span class="ph-label">μ sliding        = </span><span class="ph-val">0.20</span><br>
+  <span class="ph-form">fk = μk × N → decel = μk × g = 1.962 m/s²</span>
+  <span class="ph-label">μ rolling        = </span><span class="ph-val">0.01</span><br>
+  <span class="ph-form">fr = μr × N → decel = μr × g = 0.098 m/s²</span>
+
+  <span class="ph-section">── Restitution ──</span><br>
+  <span class="ph-label">Ball–Ball (e)    = </span><span class="ph-val">0.95</span><br>
+  <span class="ph-form">J = (1+e)×v_rel/2 ; v1'=v1-J·n ; v2'=v2+J·n</span>
+  <span class="ph-label">Ball–Cushion (e) = </span><span class="ph-val">0.70</span><br>
+  <span class="ph-form">vn' = −e × vn  (normal component reversed)</span>
+
+  <span class="ph-section">── Live: Cue Ball ──</span><br>
+  <span class="ph-label">Speed |v|        = </span><span class="ph-live" id="liveSpeed">0.0000 m/s</span><br>
+  <span class="ph-form">|v| = √(vx² + vz²)</span>
+  <span class="ph-label">Phase            = </span><span class="ph-live" id="livePhase">STOPPED ⚪</span><br>
+  <span class="ph-form">sliding when ω &lt; v/r ; rolling when ω ≈ v/r</span>
+  <span class="ph-label">Angular ω        = </span><span class="ph-live" id="liveOmega">0.0000 rad/s</span><br>
+  <span class="ph-form">ω = v / r</span>
+  <span class="ph-label">Decel applied    = </span><span class="ph-live" id="liveDecel">0.0000 m/s²</span><br>
+  <span class="ph-form">sliding→μk×g ; rolling→μr×g</span>
+
+  <span class="ph-section">── Last Shot ──</span><br>
+  <span class="ph-label">Pullback %       = </span><span class="ph-live" id="shotPower">0 %</span><br>
+  <span class="ph-label">Impulse (J)      = </span><span class="ph-live" id="shotJ">0.0000 N·s</span><br>
+  <span class="ph-form">J = 0.02 + pullback × 2.0</span>
+  <span class="ph-label">Velocity (Δv)    = </span><span class="ph-live" id="shotDv">0.0000 m/s</span><br>
+  <span class="ph-form">Δv = J / m = J / 0.17</span>
+  <span class="ph-label">vx               = </span><span class="ph-live" id="shotVx">0.0000</span><br>
+  <span class="ph-form">vx = −sin(aimAngle) × Δv</span>
+  <span class="ph-label">vz               = </span><span class="ph-live" id="shotVz">0.0000</span><br>
+  <span class="ph-form">vz = −cos(aimAngle) × Δv</span>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <script>
-// ================= Scene =================
+
+// ============================================================
+// PHYSICS CONSTANTS
+// ============================================================
+const PHYS = {
+  g        : 9.81,
+  m        : 0.17,
+  r        : 0.18,
+  mu_slide : 0.20,
+  mu_roll  : 0.01,
+  e_ball   : 0.95,
+  e_cushion: 0.70,
+  dt       : 1/60,
+};
+PHYS.N       = PHYS.m * PHYS.g;
+PHYS.a_slide = PHYS.mu_slide * PHYS.g;
+PHYS.a_roll  = PHYS.mu_roll  * PHYS.g;
+
+// ============================================================
+// PHYSICS PANEL
+// ============================================================
+let physicsVisible = false;
+let lastShotPower  = 0;
+let lastShotJ      = 0;
+let lastShotDv     = 0;
+let lastShotVx     = 0;
+let lastShotVz     = 0;
+
+function togglePhysics() {
+  physicsVisible = !physicsVisible;
+  document.getElementById('physicsPanel').style.display = physicsVisible ? 'block' : 'none';
+  document.getElementById('pToggleHint').textContent    = physicsVisible ? 'P — Hide Physics' : 'P — Show Physics';
+}
+
+function updatePhysicsPanel() {
+  if (!physicsVisible || mode !== 'play') return;
+  const cb = cueBalls[playTableIndex];
+  if (!cb) return;
+
+  const vx    = cb.userData.vx || 0;
+  const vz    = cb.userData.vz || 0;
+  const speed = Math.sqrt(vx*vx + vz*vz);
+  const omega = speed / PHYS.r;
+  const sliding = cb.userData.isSliding;
+  const moving  = speed > 0.001;
+
+  const phase = !moving ? 'STOPPED ⚪' : sliding ? 'SLIDING 🔴' : 'ROLLING 🟢';
+  const decel = !moving ? 0 : sliding ? PHYS.a_slide : PHYS.a_roll;
+
+  document.getElementById('liveSpeed').textContent = speed.toFixed(4) + ' m/s';
+  document.getElementById('livePhase').textContent = phase;
+  document.getElementById('liveOmega').textContent = omega.toFixed(4) + ' rad/s';
+  document.getElementById('liveDecel').textContent = decel.toFixed(4) + ' m/s²';
+
+  // last shot — updates when shot is taken
+  document.getElementById('shotPower').textContent = (lastShotPower * 100).toFixed(1) + ' %';
+  document.getElementById('shotJ').textContent     = lastShotJ.toFixed(4) + ' N·s';
+  document.getElementById('shotDv').textContent    = lastShotDv.toFixed(4) + ' m/s';
+  document.getElementById('shotVx').textContent    = lastShotVx.toFixed(4);
+  document.getElementById('shotVz').textContent    = lastShotVz.toFixed(4);
+}
+
+// ============================================================
+// SCENE
+// ============================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
 
-// ================= Camera =================
-const camera = new THREE.PerspectiveCamera(
-  75, window.innerWidth / window.innerHeight, 0.1, 2000
-);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 5, 30);
 
-// ================= Renderer =================
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// ================= Pointer Lock =================
+// ============================================================
+// MODE STATE
+// ============================================================
+let mode           = 'walk';
+let playTableIndex = 0;
+let aimAngle       = 0;
+let stickPullback  = 0;
+let isShooting     = false;
+let gameOver       = false;
+
+// ============================================================
+// POINTER LOCK
+// ============================================================
 let yaw = 0, pitch = 0, isLocked = false;
-renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+
+renderer.domElement.addEventListener('click', () => {
+  if (mode === 'walk') {
+    renderer.domElement.requestPointerLock();
+  } else if (mode === 'play' && isLocked && !isShooting && !gameOver) {
+    shootCueBall();
+  }
+});
+
 document.addEventListener('pointerlockchange', () => {
   isLocked = document.pointerLockElement === renderer.domElement;
-  document.getElementById('instructions').style.display = isLocked ? 'none' : 'block';
+  if (mode === 'walk') {
+    document.getElementById('instructions').style.display = isLocked ? 'none' : 'block';
+  }
 });
+
 document.addEventListener('mousemove', (e) => {
   if (!isLocked) return;
-  yaw   -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch  = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch));
+  if (mode === 'walk') {
+    yaw   -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch  = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch));
+    camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+  } else if (mode === 'play') {
+    aimAngle -= e.movementX * 0.003;
+    updateStickPosition();
+  }
 });
 
-// ================= WASD + E/Q =================
+// ============================================================
+// KEYBOARD
+// ============================================================
 const keys = {};
-document.addEventListener('keydown', (e) => keys[e.code] = true);
-document.addEventListener('keyup',   (e) => keys[e.code] = false);
+document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (e.code === 'KeyF' && mode === 'play') exitPlayMode();
+  if (e.code === 'KeyR' && mode === 'play') resetBalls();
+  if (e.code === 'KeyP') togglePhysics();
+});
+document.addEventListener('keyup', (e) => keys[e.code] = false);
 
 const moveSpeed = 0.12;
-const dir = new THREE.Vector3();
-const right = new THREE.Vector3();
-let cameraY = 5;
+const dir       = new THREE.Vector3();
+const rightVec  = new THREE.Vector3();
+let cameraY     = 5;
 
 function updateMovement() {
-  if (!isLocked) return;
+  if (mode !== 'walk' || !isLocked) return;
   dir.set(Math.sin(yaw), 0, Math.cos(yaw));
-  right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+  rightVec.set(Math.cos(yaw), 0, -Math.sin(yaw));
   if (keys['KeyW']) camera.position.addScaledVector(dir, -moveSpeed);
   if (keys['KeyS']) camera.position.addScaledVector(dir,  moveSpeed);
-  if (keys['KeyA']) camera.position.addScaledVector(right, -moveSpeed);
-  if (keys['KeyD']) camera.position.addScaledVector(right,  moveSpeed);
+  if (keys['KeyA']) camera.position.addScaledVector(rightVec, -moveSpeed);
+  if (keys['KeyD']) camera.position.addScaledVector(rightVec,  moveSpeed);
   if (keys['KeyE']) cameraY += moveSpeed;
   if (keys['KeyQ']) cameraY -= moveSpeed;
   cameraY = Math.max(1, Math.min(12, cameraY));
@@ -88,14 +347,14 @@ function updateMovement() {
   camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
 }
 
-// ================= Lights =================
-const ambient = new THREE.AmbientLight(0xffffff, 0.05);
-scene.add(ambient);
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.05);
-dirLight.position.set(0, 10, 0);
-scene.add(dirLight);
+// ============================================================
+// LIGHTS
+// ============================================================
+scene.add(new THREE.AmbientLight(0xffffff, 0.08));
 
-// ================= Textures =================
+// ============================================================
+// TEXTURES
+// ============================================================
 const texLoader = new THREE.TextureLoader();
 
 function loadWallMaterial(repeatX, repeatY) {
@@ -115,7 +374,9 @@ function loadWallMaterial(repeatX, repeatY) {
   });
 }
 
-// ================= Hall =================
+// ============================================================
+// HALL
+// ============================================================
 const hallWidth = 60, hallHeight = 14, hallDepth = 50;
 
 const floorColor = texLoader.load('./wood/Wood084A_2K-JPG_Color.jpg');
@@ -127,7 +388,7 @@ const floorRough = texLoader.load('./wood/Wood084A_2K-JPG_Roughness.jpg');
 });
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(hallWidth, hallDepth),
-  new THREE.MeshStandardMaterial({ map: floorColor, normalMap: floorNorm, roughnessMap: floorRough, roughness: 0.9, color: 0x888888 })
+  new THREE.MeshStandardMaterial({ map: floorColor, normalMap: floorNorm, roughnessMap: floorRough, roughness: 0.9, color: 0x666666 })
 );
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
@@ -135,7 +396,7 @@ scene.add(floor);
 
 const ceiling = new THREE.Mesh(
   new THREE.PlaneGeometry(hallWidth, hallDepth),
-  new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
+  new THREE.MeshStandardMaterial({ color: 0x111111 })
 );
 ceiling.rotation.x = Math.PI / 2;
 ceiling.position.y = hallHeight;
@@ -144,41 +405,39 @@ scene.add(ceiling);
 const backWall = new THREE.Mesh(new THREE.PlaneGeometry(hallWidth, hallHeight), loadWallMaterial(6, 2));
 backWall.position.set(0, hallHeight / 2, -hallDepth / 2);
 scene.add(backWall);
-
 const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(hallWidth, hallHeight), loadWallMaterial(6, 2));
 frontWall.rotation.y = Math.PI;
 frontWall.position.set(0, hallHeight / 2, hallDepth / 2);
 scene.add(frontWall);
-
 const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(hallDepth, hallHeight), loadWallMaterial(5, 2));
 leftWall.rotation.y = Math.PI / 2;
 leftWall.position.set(-hallWidth / 2, hallHeight / 2, 0);
 scene.add(leftWall);
-
 const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(hallDepth, hallHeight), loadWallMaterial(5, 2));
 rightWall.rotation.y = -Math.PI / 2;
 rightWall.position.set(hallWidth / 2, hallHeight / 2, 0);
 scene.add(rightWall);
 
-// ================= Ball Texture Generator =================
-// Creates a canvas texture with the ball number and correct color
+// ============================================================
+// BALL TEXTURES
+// ============================================================
 const ballData = [
-  { n: 0,  color: '#ffffff', stripe: false }, // cue ball
-  { n: 1,  color: '#f5b800', stripe: false }, // yellow solid
-  { n: 2,  color: '#1a44c8', stripe: false }, // blue solid
-  { n: 3,  color: '#d62b2b', stripe: false }, // red solid
-  { n: 4,  color: '#6b1fa0', stripe: false }, // purple solid
-  { n: 5,  color: '#e06000', stripe: false }, // orange solid
-  { n: 6,  color: '#1a8c1a', stripe: false }, // green solid
-  { n: 7,  color: '#8b1a1a', stripe: false }, // maroon solid
-  { n: 8,  color: '#111111', stripe: false }, // black 8 ball
-  { n: 9,  color: '#f5b800', stripe: true  }, // yellow stripe
-  { n: 10, color: '#1a44c8', stripe: true  }, // blue stripe
-  { n: 11, color: '#d62b2b', stripe: true  }, // red stripe
-  { n: 12, color: '#6b1fa0', stripe: true  }, // purple stripe
-  { n: 13, color: '#e06000', stripe: true  }, // orange stripe
-  { n: 14, color: '#1a8c1a', stripe: true  }, // green stripe
-  { n: 15, color: '#8b1a1a', stripe: true  }, // maroon stripe
+  { n: 0,  color: '#ffffff', stripe: false },
+  { n: 1,  color: '#f5b800', stripe: false },
+  { n: 2,  color: '#1a44c8', stripe: false },
+  { n: 3,  color: '#d62b2b', stripe: false },
+  { n: 4,  color: '#6b1fa0', stripe: false },
+  { n: 5,  color: '#e06000', stripe: false },
+  { n: 6,  color: '#1a8c1a', stripe: false },
+  { n: 7,  color: '#8b1a1a', stripe: false },
+  { n: 8,  color: '#111111', stripe: false },
+  { n: 9,  color: '#f5b800', stripe: true  },
+  { n: 10, color: '#1a44c8', stripe: true  },
+  { n: 11, color: '#d62b2b', stripe: true  },
+  { n: 12, color: '#6b1fa0', stripe: true  },
+  { n: 13, color: '#e06000', stripe: true  },
+  { n: 14, color: '#1a8c1a', stripe: true  },
+  { n: 15, color: '#8b1a1a', stripe: true  },
 ];
 
 function makeBallTexture(data) {
@@ -186,208 +445,529 @@ function makeBallTexture(data) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-
   if (data.stripe) {
-    // white base
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, size, size);
-    // colored stripe in the middle
     ctx.fillStyle = data.color;
     ctx.fillRect(0, size * 0.3, size, size * 0.4);
   } else {
-    // solid color
     ctx.fillStyle = data.color;
     ctx.fillRect(0, 0, size, size);
   }
-
-  // white circle for number
   if (data.n > 0) {
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size * 0.22, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
-
-    // number text
     ctx.fillStyle = '#222222';
     ctx.font = `bold ${size * 0.28}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(data.n), size / 2, size / 2);
   }
-
   return new THREE.CanvasTexture(canvas);
 }
 
-// ================= Create All 16 Balls =================
-const BALL_RADIUS = 0.18;
+// ============================================================
+// BALLS
+// ============================================================
+const BALL_RADIUS  = PHYS.r;
+const BALL_SPACING = BALL_RADIUS * 2.05;
 
-// Triangle rack formation offsets (standard pool layout)
-const rackOffsets = [
-  // row 1 (front - 1 ball)
-  [0, 0],
-  // row 2 (2 balls)
-  [0.32, -0.185], [0.32,  0.185],
-  // row 3 (3 balls)
-  [0.64, -0.37],  [0.64,  0],    [0.64,  0.37],
-  // row 4 (4 balls)
-  [0.96, -0.555], [0.96, -0.185],[0.96,  0.185],[0.96,  0.555],
-  // row 5 (5 balls)
-  [1.28, -0.74],  [1.28, -0.37], [1.28,  0],   [1.28,  0.37], [1.28,  0.74],
-];
-
-// ball order in rack: 1 at top, 8 in middle, rest random
+const rackOffsets = [];
+for (let row = 0; row < 5; row++) {
+  for (let col = 0; col <= row; col++) {
+    rackOffsets.push([
+      (col - row / 2) * BALL_SPACING,
+      row * BALL_SPACING * (Math.sqrt(3) / 2)
+    ]);
+  }
+}
 const rackOrder = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
 
-function createBalls(tableX, tableZ, tableTopY) {
-  const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 32);
-  const y = tableTopY + BALL_RADIUS + 0.01;
+let allBalls       = [];
+let cueBalls       = [];
+const tableBounds  = [];
+let globalTableTopY = 0;
+let ballsRemaining  = [];
+let eightBallMesh   = [];
 
-  // place racked balls
-  rackOrder.forEach((ballNum, i) => {
-    const offset = rackOffsets[i];
-    const mat = new THREE.MeshStandardMaterial({
-      map: makeBallTexture(ballData[ballNum]),
-      roughness: 0.2,
-      metalness: 0.1,
-    });
-    const ball = new THREE.Mesh(ballGeo, mat);
-    ball.position.set(
-      tableX + offset[1],
-      y,
-      tableZ + offset[0]
-    );
-    ball.castShadow = true;
-    scene.add(ball);
-  });
-
-  // cue ball — placed separately to the left of the rack
-  const cueMat = new THREE.MeshStandardMaterial({
-    map: makeBallTexture(ballData[0]),
-    roughness: 0.15,
-    metalness: 0.1,
-  });
-  const cueBall = new THREE.Mesh(ballGeo, cueMat);
-  cueBall.position.set(tableX , 4.2, tableZ);
-  cueBall.castShadow = true;
-  scene.add(cueBall);
+function makeBallMesh(dataEntry) {
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
+    new THREE.MeshStandardMaterial({ map: makeBallTexture(dataEntry), roughness: 0.25, metalness: 0.1 })
+  );
+  mesh.castShadow    = false;
+  mesh.receiveShadow = false;
+  mesh.userData.vx         = 0;
+  mesh.userData.vz         = 0;
+  mesh.userData.omega_x    = 0;
+  mesh.userData.omega_z    = 0;
+  mesh.userData.isSliding  = false;
+  mesh.userData.tableIndex = -1;
+  mesh.userData.ballNumber = -1;
+  return mesh;
 }
 
-// ================= Positions =================
+function createBalls(tableX, tableZ, tableTopY, tableIndex) {
+  const y          = tableTopY + BALL_RADIUS - 0.2;
+  const rackStartZ = tableZ + 1.4;
+  ballsRemaining[tableIndex] = 0;
+
+  rackOrder.forEach((ballNum, i) => {
+    const off  = rackOffsets[i];
+    const ball = makeBallMesh(ballData[ballNum]);
+    ball.position.set(tableX + off[0], y, rackStartZ + off[1]);
+    ball.userData.tableIndex = tableIndex;
+    ball.userData.ballNumber = ballNum;
+    scene.add(ball);
+    allBalls.push(ball);
+    if (ballNum === 8) eightBallMesh[tableIndex] = ball;
+    else ballsRemaining[tableIndex]++;
+  });
+
+  const cueBall = makeBallMesh(ballData[0]);
+  cueBall.position.set(tableX, y, tableZ - 1.8);
+  cueBall.userData.tableIndex = tableIndex;
+  cueBall.userData.ballNumber = 0;
+  scene.add(cueBall);
+  allBalls.push(cueBall);
+  cueBalls.push(cueBall);
+}
+
+function resetBalls() {
+  document.getElementById('gameMsg').style.display = 'none';
+  gameOver = false; isShooting = false;
+  allBalls.forEach(b => scene.remove(b));
+  allBalls = []; cueBalls = []; eightBallMesh = []; ballsRemaining = [];
+  tablePositions.forEach((pos, i) => createBalls(pos.x, pos.z, globalTableTopY, i));
+  if (cueStick && mode === 'play') {
+    cueStick.visible = true; stickPullback = 0;
+    updateStickPosition();
+  }
+}
+
+function showGameMsg(text) {
+  gameOver = true; isShooting = false;
+  if (cueStick) cueStick.visible = false;
+  document.getElementById('gameMsgText').textContent = text;
+  document.getElementById('gameMsg').style.display   = 'block';
+}
+
+// ============================================================
+// POCKETS
+// ============================================================
+const POCKET_RADIUS   = 0.35;
+const HALF_W          = 2.70;
+const HALF_L          = 5.05;
+const pocketsPerTable = [];
+
+function getPocketPositions(tableX, tableZ) {
+  return [
+    { x: tableX - HALF_W, z: tableZ - HALF_L },
+    { x: tableX + HALF_W, z: tableZ - HALF_L },
+    { x: tableX - HALF_W, z: tableZ + HALF_L },
+    { x: tableX + HALF_W, z: tableZ + HALF_L },
+    { x: tableX - HALF_W, z: tableZ          },
+    { x: tableX + HALF_W, z: tableZ          },
+  ];
+}
+
+function checkPockets() {
+  for (let i = allBalls.length - 1; i >= 0; i--) {
+    const ball = allBalls[i];
+    const idx  = ball.userData.tableIndex;
+    if (idx < 0 || !pocketsPerTable[idx]) continue;
+    if (mode === 'play' && idx !== playTableIndex) continue;
+
+    for (const pocket of pocketsPerTable[idx]) {
+      const dx = ball.position.x - pocket.x;
+      const dz = ball.position.z - pocket.z;
+      if (Math.sqrt(dx*dx + dz*dz) < POCKET_RADIUS) {
+        const ballNum = ball.userData.ballNumber;
+        if (ballNum === 0) {
+          ball.userData.vx = ball.userData.vz = 0;
+          ball.userData.omega_x = ball.userData.omega_z = 0;
+          ball.position.set(
+            tablePositions[idx].x,
+            globalTableTopY + BALL_RADIUS - 0.2,
+            tablePositions[idx].z - 1.8
+          );
+        } else if (ballNum === 8) {
+          scene.remove(ball); allBalls.splice(i, 1); eightBallMesh[idx] = null;
+          showGameMsg(ballsRemaining[idx] > 0
+            ? '❌ You Lose!\nPocketed the 8 ball too early!'
+            : '🏆 You Win!\nAll balls cleared!');
+        } else {
+          scene.remove(ball); allBalls.splice(i, 1);
+          if (ballsRemaining[idx] > 0) ballsRemaining[idx]--;
+        }
+        break;
+      }
+    }
+  }
+}
+
+// ============================================================
+// PHYSICS
+// ============================================================
+function updateSingleBall(ball) {
+  let vx = ball.userData.vx;
+  let vz = ball.userData.vz;
+  const speed = Math.sqrt(vx*vx + vz*vz);
+
+  if (speed < 0.0005) {
+    ball.userData.vx = ball.userData.vz = 0;
+    ball.userData.omega_x = ball.userData.omega_z = 0;
+    ball.userData.isSliding = false;
+    return;
+  }
+
+  const ux = vx/speed, uz = vz/speed;
+  const omegaExp = speed / PHYS.r;
+  const omegaCur = Math.sqrt(ball.userData.omega_x**2 + ball.userData.omega_z**2);
+  ball.userData.isSliding = omegaCur < omegaExp * 0.98;
+
+  const dv = (ball.userData.isSliding ? PHYS.a_slide : PHYS.a_roll) * PHYS.dt;
+  if (dv >= speed) {
+    ball.userData.vx = ball.userData.vz = 0;
+    ball.userData.omega_x = ball.userData.omega_z = 0;
+    return;
+  }
+
+  vx -= ux*dv; vz -= uz*dv;
+  ball.userData.vx = vx; ball.userData.vz = vz;
+  ball.position.x += vx * PHYS.dt;
+  ball.position.z += vz * PHYS.dt;
+
+  const ns = Math.sqrt(vx*vx + vz*vz);
+  const w  = ns / PHYS.r;
+  ball.userData.omega_x =  (vz/ns)*w;
+  ball.userData.omega_z = -(vx/ns)*w;
+  ball.rotation.x += ball.userData.omega_x * PHYS.dt;
+  ball.rotation.z += ball.userData.omega_z * PHYS.dt;
+}
+
+function resolveBallBallCollision(a, b) {
+  const dx = b.position.x-a.position.x, dz = b.position.z-a.position.z;
+  const dist = Math.sqrt(dx*dx+dz*dz);
+  const minD = BALL_RADIUS*2;
+  if (dist >= minD || dist < 0.0001) return;
+  const nx = dx/dist, nz = dz/dist;
+  const vRel = (a.userData.vx-b.userData.vx)*nx + (a.userData.vz-b.userData.vz)*nz;
+  if (vRel <= 0) return;
+  const J = (1+PHYS.e_ball)*vRel/2;
+  a.userData.vx -= J*nx; a.userData.vz -= J*nz;
+  b.userData.vx += J*nx; b.userData.vz += J*nz;
+  const ov = (minD-dist)/2+0.0001;
+  a.position.x -= ov*nx; a.position.z -= ov*nz;
+  b.position.x += ov*nx; b.position.z += ov*nz;
+}
+
+function resolveCushionCollision(ball, bounds) {
+  let vx = ball.userData.vx, vz = ball.userData.vz, ch = false;
+  if (ball.position.x-BALL_RADIUS < bounds.minX) { ball.position.x=bounds.minX+BALL_RADIUS; if(vx<0){vx=-PHYS.e_cushion*vx;ch=true;} }
+  if (ball.position.x+BALL_RADIUS > bounds.maxX) { ball.position.x=bounds.maxX-BALL_RADIUS; if(vx>0){vx=-PHYS.e_cushion*vx;ch=true;} }
+  if (ball.position.z-BALL_RADIUS < bounds.minZ) { ball.position.z=bounds.minZ+BALL_RADIUS; if(vz<0){vz=-PHYS.e_cushion*vz;ch=true;} }
+  if (ball.position.z+BALL_RADIUS > bounds.maxZ) { ball.position.z=bounds.maxZ-BALL_RADIUS; if(vz>0){vz=-PHYS.e_cushion*vz;ch=true;} }
+  if (ch) { ball.userData.vx=vx; ball.userData.vz=vz; ball.userData.isSliding=true; ball.userData.omega_x=0; ball.userData.omega_z=0; }
+}
+
+function updateBallPhysics() {
+  if (gameOver) return;
+  for (const ball of allBalls) updateSingleBall(ball);
+  for (let i=0;i<allBalls.length;i++)
+    for (let j=i+1;j<allBalls.length;j++) {
+      if (allBalls[i].userData.tableIndex !== allBalls[j].userData.tableIndex) continue;
+      resolveBallBallCollision(allBalls[i], allBalls[j]);
+    }
+  for (const ball of allBalls) {
+    const idx = ball.userData.tableIndex;
+    if (idx>=0 && tableBounds[idx]) resolveCushionCollision(ball, tableBounds[idx]);
+  }
+  checkPockets();
+  if (mode==='play' && !isShooting && !gameOver) {
+    const cb = cueBalls[playTableIndex];
+    if (cb && (Math.abs(cb.userData.vx)>0.001 || Math.abs(cb.userData.vz)>0.001))
+      updateStickPosition();
+  }
+}
+
+// ============================================================
+// CUE STICK
+// ============================================================
+let cueStick = null;
+const STICK_LENGTH  = 2.0;
+const STICK_MIN_GAP = 0.28;
+
+function createCueStick() {
+  const group = new THREE.Group();
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.018, 0.042, STICK_LENGTH, 16),
+    new THREE.MeshStandardMaterial({ color: 0xc8a050, roughness: 0.4 })
+  );
+  shaft.rotation.z = Math.PI / 2;
+  shaft.position.x = STICK_LENGTH / 2;
+  group.add(shaft);
+
+  const tip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.014, 0.018, 0.07, 12),
+    new THREE.MeshStandardMaterial({ color: 0x4488ff, roughness: 0.3 })
+  );
+  tip.rotation.z = Math.PI / 2;
+  tip.position.x = 0.035;
+  group.add(tip);
+
+  const butt = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.044, 0.046, 0.25, 12),
+    new THREE.MeshStandardMaterial({ color: 0x3a1800, roughness: 0.7 })
+  );
+  butt.rotation.z = Math.PI / 2;
+  butt.position.x = STICK_LENGTH - 0.1;
+  group.add(butt);
+
+  group.visible = false;
+  scene.add(group);
+  return group;
+}
+
+function updateStickPosition() {
+  if (!cueStick || mode !== 'play') return;
+  const cueBall = cueBalls[playTableIndex];
+  if (!cueBall) return;
+
+  const gap     = STICK_MIN_GAP + stickPullback * 1.2;
+  const camDist = 2.8;
+
+  camera.position.set(
+    cueBall.position.x + Math.sin(aimAngle) * camDist,
+    globalTableTopY + 1.8,
+    cueBall.position.z + Math.cos(aimAngle) * camDist
+  );
+  camera.lookAt(
+    cueBall.position.x - Math.sin(aimAngle) * 0.5,
+    cueBall.position.y,
+    cueBall.position.z - Math.cos(aimAngle) * 0.5
+  );
+
+  // ✅ stick always parallel to camera direction
+  cueStick.position.copy(camera.position);
+  cueStick.rotation.copy(camera.rotation);
+  cueStick.rotation.x += 0.25;
+}
+
+document.addEventListener('wheel', (e) => {
+  if (mode !== 'play' || isShooting || gameOver) return;
+  stickPullback = Math.max(0, Math.min(1, stickPullback + e.deltaY * 0.0008));
+  document.getElementById('powerFill').style.width = (stickPullback * 100) + '%';
+  updateStickPosition();
+});
+
+// ============================================================
+// SHOOT
+// ============================================================
+function shootCueBall() {
+  if (isShooting || stickPullback < 0.01 || gameOver) return;
+  isShooting = true;
+
+  const cueBall    = cueBalls[playTableIndex];
+  const shootAngle = aimAngle;
+  const J          = 0.02 + stickPullback * 2.0;
+  const dv         = J / PHYS.m;
+  const vx         = -Math.sin(shootAngle) * dv;
+  const vz         = -Math.cos(shootAngle) * dv;
+
+  // ✅ save all values for physics panel
+  lastShotPower = stickPullback;
+  lastShotJ     = J;
+  lastShotDv    = dv;
+  lastShotVx    = vx;
+  lastShotVz    = vz;
+
+  const steps = 10;
+  let frame   = 0;
+
+  const anim = setInterval(() => {
+    frame++;
+    if (cueStick) {
+      cueStick.position.copy(camera.position);
+      cueStick.rotation.copy(camera.rotation);
+      cueStick.rotation.x += 0.25 - (frame/steps) * 0.1;
+    }
+    if (frame >= steps) {
+      clearInterval(anim);
+
+      cueBall.userData.vx        = vx;
+      cueBall.userData.vz        = vz;
+      cueBall.userData.isSliding = true;
+      cueBall.userData.omega_x   = 0;
+      cueBall.userData.omega_z   = 0;
+      stickPullback = 0;
+      document.getElementById('powerFill').style.width = '0%';
+
+      let rf = 0;
+      const retract = setInterval(() => {
+        rf++;
+        if (cueStick) {
+          cueStick.position.copy(camera.position);
+          cueStick.rotation.copy(camera.rotation);
+          cueStick.rotation.x += 0.25 + rf * 0.03;
+        }
+        if (rf >= 10) {
+          clearInterval(retract);
+          if (cueStick) cueStick.visible = false;
+          isShooting = false;
+
+          const waitStop = setInterval(() => {
+            if (gameOver) { clearInterval(waitStop); return; }
+            const b = cueBalls[playTableIndex];
+            if (Math.sqrt(b.userData.vx**2 + b.userData.vz**2) < 0.002) {
+              clearInterval(waitStop);
+              if (cueStick && mode === 'play' && !gameOver) {
+                cueStick.visible = true;
+                updateStickPosition();
+              }
+            }
+          }, 100);
+        }
+      }, 20);
+    }
+  }, 16);
+}
+
+// ============================================================
+// PLAY MODE
+// ============================================================
+function enterPlayMode() {
+  mode = 'play'; gameOver = false;
+  document.getElementById('playBtn').textContent        = '🚶 Exit (F key)';
+  document.getElementById('aimInfo').style.display      = 'block';
+  document.getElementById('powerBar').style.display     = 'block';
+  document.getElementById('instructions').style.display = 'none';
+  document.getElementById('crosshair').style.display    = 'none';
+
+  let minDist = Infinity;
+  tablePositions.forEach((pos, i) => {
+    const d = Math.hypot(camera.position.x-pos.x, camera.position.z-pos.z);
+    if (d < minDist) { minDist = d; playTableIndex = i; }
+  });
+
+  stickPullback = 0; aimAngle = Math.PI;
+  if (!cueStick) cueStick = createCueStick();
+  cueStick.visible = true;
+  updateStickPosition();
+  renderer.domElement.requestPointerLock();
+}
+
+function exitPlayMode() {
+  mode = 'walk';
+  document.getElementById('playBtn').textContent        = '🎱 Single Player Mode';
+  document.getElementById('aimInfo').style.display      = 'none';
+  document.getElementById('powerBar').style.display     = 'none';
+  document.getElementById('crosshair').style.display    = 'block';
+  document.getElementById('instructions').style.display = 'block';
+  document.getElementById('gameMsg').style.display      = 'none';
+  if (cueStick) cueStick.visible = false;
+  stickPullback = 0; isShooting = false; gameOver = false;
+  document.exitPointerLock();
+  camera.position.set(0, 5, 30);
+  yaw = 0; pitch = 0;
+  camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
+}
+
+// ============================================================
+// POSITIONS
+// ============================================================
 const lampPositions = [
   { x: -16, z: -10 }, { x: 0, z: -10 }, { x: 16, z: -10 },
-  { x: -8,  z:  10 }, { x: 8, z:  10 },
+  { x:  -8, z:  10 }, { x: 8, z:  10 },
 ];
 const tablePositions = lampPositions;
-const lampY = hallHeight - 3;
+const lampY          = hallHeight - 3;
 
-// ================= Loader =================
+// ============================================================
+// LOADER
+// ============================================================
 const loader = new THREE.GLTFLoader();
 
-// ================= Load Lamps =================
 loader.load('./ceiling_lamps.glb', function(gltf) {
   const originalLamp = gltf.scene;
   const box = new THREE.Box3().setFromObject(originalLamp);
   originalLamp.position.sub(box.getCenter(new THREE.Vector3()));
   originalLamp.scale.setScalar(5 / box.getSize(new THREE.Vector3()).length());
-
   originalLamp.traverse((child) => {
     if (child.isMesh) {
       child.material = child.material.clone();
       child.material.emissive = new THREE.Color(0xfff5aa);
-      child.material.emissiveIntensity = 1.5;
+      child.material.emissiveIntensity = 0.8;
     }
   });
-
   lampPositions.forEach((pos, i) => {
-    const lamp = i === 0 ? originalLamp : originalLamp.clone();
+    const lamp = i===0 ? originalLamp : originalLamp.clone();
     lamp.position.set(pos.x, lampY, pos.z);
     scene.add(lamp);
-
-    const spot = new THREE.SpotLight(0xfff5cc, 6, 30, Math.PI / 2.5, 0.5, 0.5);
-    spot.position.set(pos.x, lampY - 0.5, pos.z);
+    const spot = new THREE.SpotLight(0xfff5cc, 2.5, 35, Math.PI/3, 0.6, 1.2);
+    spot.position.set(pos.x, lampY-0.5, pos.z);
     spot.target.position.set(pos.x, 0, pos.z);
     spot.castShadow = true;
-    spot.shadow.mapSize.width = spot.shadow.mapSize.height = 1024;
-    scene.add(spot);
-    scene.add(spot.target);
-
-    const fill = new THREE.PointLight(0xfff5cc, 3, 30);
-    fill.position.set(pos.x, lampY - 1, pos.z);
+    spot.shadow.mapSize.width = spot.shadow.mapSize.height = 512;
+    scene.add(spot); scene.add(spot.target);
+    const fill = new THREE.PointLight(0xfff5cc, 1.0, 25);
+    fill.position.set(pos.x, lampY-1, pos.z);
     scene.add(fill);
   });
-
   console.log("LAMPS LOADED ✅");
 }, undefined, (e) => console.error("LAMP ERROR ❌", e));
 
-// ================= Load Tables + Balls =================
 loader.load('./billiards_pool.glb', function(gltf) {
   const original = gltf.scene;
   const box    = new THREE.Box3().setFromObject(original);
   const center = box.getCenter(new THREE.Vector3());
   const size   = box.getSize(new THREE.Vector3());
-
   original.position.sub(center);
-  original.scale.setScalar(10 / Math.max(size.x, size.y, size.z));
-
+  const scaleFactor = 12 / Math.max(size.x, size.y, size.z);
+  original.scale.setScalar(scaleFactor);
   const scaledBox    = new THREE.Box3().setFromObject(original);
   const tableTopY    = scaledBox.max.y;
   const tableBottomY = scaledBox.min.y;
+  globalTableTopY    = tableTopY - tableBottomY;
 
   tablePositions.forEach((pos, i) => {
-    const clone = i === 0 ? original : original.clone();
+    const clone = i===0 ? original : original.clone();
     clone.position.set(pos.x, -tableBottomY, pos.z);
     scene.add(clone);
-
-    // place 16 balls on every table
-    createBalls(pos.x, pos.z, tableTopY - tableBottomY);
+    tableBounds.push({
+      minX: pos.x-(HALF_W-0.3), maxX: pos.x+(HALF_W-0.3),
+      minZ: pos.z-(HALF_L-0.3), maxZ: pos.z+(HALF_L-0.3),
+    });
+    pocketsPerTable.push(getPocketPositions(pos.x, pos.z));
+    createBalls(pos.x, pos.z, globalTableTopY, i);
   });
-
   console.log("TABLES + BALLS LOADED ✅");
-
-  loader.load('./stick.glb', function(gltf) {
-    const stick = gltf.scene;
-    const sBox  = new THREE.Box3().setFromObject(stick);
-    stick.position.sub(sBox.getCenter(new THREE.Vector3()));
-    stick.scale.setScalar(8 / sBox.getSize(new THREE.Vector3()).length());
-    stick.rotation.x = Math.PI / 8;
-    stick.rotation.z = Math.PI / 2;
-    stick.position.set(tablePositions[0].x, tableTopY - tableBottomY + 0.05, tablePositions[0].z);
-    scene.add(stick);
-    console.log("STICK LOADED ✅");
-  }, undefined, (e) => console.error("STICK ERROR ❌", e));
-
 }, undefined, (e) => console.error("TABLE ERROR ❌", e));
 
-// ================= Load Person =================
-loader.load('./star.glb', function(gltf) {
-  const person = gltf.scene;
-  const box    = new THREE.Box3().setFromObject(person);
-  const center = box.getCenter(new THREE.Vector3());
-  const size   = box.getSize(new THREE.Vector3());
-  person.position.sub(center);
-  person.scale.setScalar(3 / Math.max(size.x, size.y, size.z));
-  const scaledBox = new THREE.Box3().setFromObject(person);
-  person.position.set(tablePositions[0].x + 6, -scaledBox.min.y, tablePositions[0].z);
-  person.rotation.y = -Math.PI / 2;
-  scene.add(person);
-  console.log("PERSON LOADED ✅");
-}, undefined, (e) => console.error("PERSON ERROR ❌", e));
+document.getElementById('playBtn').addEventListener('click', () => {
+  if (mode === 'walk') enterPlayMode();
+  else exitPlayMode();
+});
 
-// ================= Animate =================
+// ============================================================
+// ANIMATE
+// ============================================================
 function animate() {
   requestAnimationFrame(animate);
   updateMovement();
+  updateBallPhysics();
+  updatePhysicsPanel();
   renderer.render(scene, camera);
 }
 animate();
 
-// ================= Resize =================
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
-
 </body>
 </html>
