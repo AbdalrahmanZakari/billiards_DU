@@ -702,28 +702,29 @@ const STICK_MIN_GAP = 0.28;
 
 function createCueStick() {
   const group = new THREE.Group();
+
+  // Shaft points along Z axis (tip at -Z, butt at +Z)
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.018, 0.042, STICK_LENGTH, 16),
     new THREE.MeshStandardMaterial({ color: 0xc8a050, roughness: 0.4 })
   );
-  shaft.rotation.z = Math.PI / 2;
-  shaft.position.x = STICK_LENGTH / 2;
+  shaft.rotation.x = Math.PI / 2;
   group.add(shaft);
 
   const tip = new THREE.Mesh(
     new THREE.CylinderGeometry(0.014, 0.018, 0.07, 12),
     new THREE.MeshStandardMaterial({ color: 0x4488ff, roughness: 0.3 })
   );
-  tip.rotation.z = Math.PI / 2;
-  tip.position.x = 0.035;
+  tip.rotation.x = Math.PI / 2;
+  tip.position.z = -(STICK_LENGTH / 2 + 0.035);
   group.add(tip);
 
   const butt = new THREE.Mesh(
     new THREE.CylinderGeometry(0.044, 0.046, 0.25, 12),
     new THREE.MeshStandardMaterial({ color: 0x3a1800, roughness: 0.7 })
   );
-  butt.rotation.z = Math.PI / 2;
-  butt.position.x = STICK_LENGTH - 0.1;
+  butt.rotation.x = Math.PI / 2;
+  butt.position.z = STICK_LENGTH / 2;
   group.add(butt);
 
   group.visible = false;
@@ -736,25 +737,39 @@ function updateStickPosition() {
   const cueBall = cueBalls[playTableIndex];
   if (!cueBall) return;
 
-  const gap     = STICK_MIN_GAP + stickPullback * 1.2;
-  const camDist = 2.8;
+  const gap = STICK_MIN_GAP + 0.3 + stickPullback * 1.2;
 
+  // Camera orbits around cue ball
   camera.position.set(
-    cueBall.position.x + Math.sin(aimAngle) * camDist,
+    cueBall.position.x + Math.sin(aimAngle) * 2.8,
     globalTableTopY + 1.8,
-    cueBall.position.z + Math.cos(aimAngle) * camDist
+    cueBall.position.z + Math.cos(aimAngle) * 2.8
   );
-  camera.lookAt(
-    cueBall.position.x - Math.sin(aimAngle) * 0.5,
-    cueBall.position.y,
-    cueBall.position.z - Math.cos(aimAngle) * 0.5
+  camera.lookAt(cueBall.position);
+
+  // Stick direction is flat (parallel to table), just using aimAngle
+  const dirX = Math.sin(aimAngle);
+  const dirZ = Math.cos(aimAngle);
+
+  // Tip is at gap distance behind the ball, flat on table level
+  const tipPos = new THREE.Vector3(
+    cueBall.position.x + dirX * gap,
+    cueBall.position.y,   // same height as ball = parallel to table
+    cueBall.position.z + dirZ * gap
   );
 
-  // ✅ stick always parallel to camera direction
-  cueStick.position.copy(camera.position);
-  cueStick.rotation.copy(camera.rotation);
-  cueStick.rotation.x += 0.25;
+  // Stick center is halfway along its length from the tip
+  cueStick.position.set(
+    tipPos.x + dirX * (STICK_LENGTH / 2),
+    cueBall.position.y,
+    tipPos.z + dirZ * (STICK_LENGTH / 2)
+  );
+
+  // Point tip toward the ball (flat, no vertical angle)
+  const targetPos = new THREE.Vector3(cueBall.position.x, cueBall.position.y, cueBall.position.z);
+  cueStick.lookAt(targetPos);
 }
+
 
 document.addEventListener('wheel', (e) => {
   if (mode !== 'play' || isShooting || gameOver) return;
@@ -777,26 +792,26 @@ function shootCueBall() {
   const vx         = -Math.sin(shootAngle) * dv;
   const vz         = -Math.cos(shootAngle) * dv;
 
-  // ✅ save all values for physics panel
   lastShotPower = stickPullback;
   lastShotJ     = J;
   lastShotDv    = dv;
   lastShotVx    = vx;
   lastShotVz    = vz;
 
-  const steps = 10;
-  let frame   = 0;
+  const steps        = 10;
+  let frame          = 0;
+  const startPullback = stickPullback;
 
+  // Animate stick moving forward toward the ball
   const anim = setInterval(() => {
     frame++;
-    if (cueStick) {
-      cueStick.position.copy(camera.position);
-      cueStick.rotation.copy(camera.rotation);
-      cueStick.rotation.x += 0.25 - (frame/steps) * 0.1;
-    }
+    stickPullback = startPullback * (1 - frame / steps);
+    updateStickPosition();
+
     if (frame >= steps) {
       clearInterval(anim);
 
+      // Apply velocity to cue ball
       cueBall.userData.vx        = vx;
       cueBall.userData.vz        = vz;
       cueBall.userData.isSliding = true;
@@ -804,33 +819,21 @@ function shootCueBall() {
       cueBall.userData.omega_z   = 0;
       stickPullback = 0;
       document.getElementById('powerFill').style.width = '0%';
+      if (cueStick) cueStick.visible = false;
+      isShooting = false;
 
-      let rf = 0;
-      const retract = setInterval(() => {
-        rf++;
-        if (cueStick) {
-          cueStick.position.copy(camera.position);
-          cueStick.rotation.copy(camera.rotation);
-          cueStick.rotation.x += 0.25 + rf * 0.03;
+      // Wait for balls to stop, then show stick again
+      const waitStop = setInterval(() => {
+        if (gameOver) { clearInterval(waitStop); return; }
+        const b = cueBalls[playTableIndex];
+        if (Math.sqrt(b.userData.vx**2 + b.userData.vz**2) < 0.002) {
+          clearInterval(waitStop);
+          if (cueStick && mode === 'play' && !gameOver) {
+            cueStick.visible = true;
+            updateStickPosition();
+          }
         }
-        if (rf >= 10) {
-          clearInterval(retract);
-          if (cueStick) cueStick.visible = false;
-          isShooting = false;
-
-          const waitStop = setInterval(() => {
-            if (gameOver) { clearInterval(waitStop); return; }
-            const b = cueBalls[playTableIndex];
-            if (Math.sqrt(b.userData.vx**2 + b.userData.vz**2) < 0.002) {
-              clearInterval(waitStop);
-              if (cueStick && mode === 'play' && !gameOver) {
-                cueStick.visible = true;
-                updateStickPosition();
-              }
-            }
-          }, 100);
-        }
-      }, 20);
+      }, 100);
     }
   }, 16);
 }
@@ -937,8 +940,8 @@ loader.load('./billiards_pool.glb', function(gltf) {
     clone.position.set(pos.x, -tableBottomY, pos.z);
     scene.add(clone);
     tableBounds.push({
-      minX: pos.x-(HALF_W-0.3), maxX: pos.x+(HALF_W-0.3),
-      minZ: pos.z-(HALF_L-0.3), maxZ: pos.z+(HALF_L-0.3),
+      minX: pos.x-(HALF_W-0.1), maxX: pos.x+(HALF_W-0.1),
+      minZ: pos.z-(HALF_L-0.1), maxZ: pos.z+(HALF_L-0.1),
     });
     pocketsPerTable.push(getPocketPositions(pos.x, pos.z));
     createBalls(pos.x, pos.z, globalTableTopY, i);
