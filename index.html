@@ -563,13 +563,18 @@ const HALF_L          = 5.05;
 const pocketsPerTable = [];
 
 function getPocketPositions(tableX, tableZ) {
+  // ✅ أرقام مستقلة للزوايا والجوانب
+  const cornerW = 2.00;  // ← عدّل هذا للزوايا يمين/يسار
+  const cornerL = 4.90;  // ← عدّل هذا للزوايا أمام/خلف
+  const sideW   = 2.70;  // ← عدّل هذا للجانبين
+
   return [
-    { x: tableX - HALF_W, z: tableZ - HALF_L },
-    { x: tableX + HALF_W, z: tableZ - HALF_L },
-    { x: tableX - HALF_W, z: tableZ + HALF_L },
-    { x: tableX + HALF_W, z: tableZ + HALF_L },
-    { x: tableX - HALF_W, z: tableZ          },
-    { x: tableX + HALF_W, z: tableZ          },
+    { x: tableX - cornerW, z: tableZ - cornerL }, // زاوية أمام يسار
+    { x: tableX + cornerW, z: tableZ - cornerL }, // زاوية أمام يمين
+    { x: tableX - cornerW, z: tableZ + cornerL }, // زاوية خلف يسار
+    { x: tableX + cornerW, z: tableZ + cornerL }, // زاوية خلف يمين
+    { x: tableX - sideW,   z: tableZ           }, // جانب يسار
+    { x: tableX + sideW,   z: tableZ           }, // جانب يمين
   ];
 }
 
